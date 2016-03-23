@@ -1,0 +1,262 @@
+\documentclass{article}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{Sweave}
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{STA841 HW1}
+\author{Dipesh Gautam}
+\date{\today}
+\maketitle
+
+\section{Problem 1}
+\begin{figure}[ht]
+<<fig=TRUE,echo=FALSE>>=
+jellyfish=read.table("jellyfish.dat")
+plot(jellyfish$Width,jellyfish$Length, type="p", pch=16, col=jellyfish$Site,
+     xlab="Width", ylab="Length")
+legend("topleft", c("Danger Island", "Salamander Bay"),
+       col=1:length(unique(jellyfish$Site)),pch=16,title="Sites")
+@
+
+\label{fig:1}
+\caption{}
+\end{figure}
+
+I've plotted the given information from "jellyfish.dat" in Fig. \ref{fig:1} where color indicate the location where the jellyfish was caught. As we can see from the plot, length and width for jellysfish seem to be linearly related. And also that the jellyfish found in Danger Island tend to be smaller on both length and width than the ones found in Salamander Bay.
+
+\section{Problem 2}
+\subsection{}
+The response variable is the number of hours of sleep each person gets. Treatment is the explanatory variable. Since we're trying to model the effect of different treatments on insomnia patients and administering the different treatments on the same patients on different nights, patient Id will be the block factor in the study.\\
+\subsection{}\
+One of the concerns I have about the designs not addressed in the data is how far apart were the nights when each patient received the treatment. And if they were in back to back nights, what (if any) effects the previous night's treatment had on the next night?
+
+
+\subsection{}
+
+<<echo=FALSE>>=
+sleep=read.table("sleep.dat", header=T)
+sleep$Treat=as.numeric(sleep$Treatment)
+@
+
+\begin{figure}[h]
+<<fig=TRUE, echo=FALSE, height=5,width=5>>=
+boxplot(sleep$Hours~sleep$Treat, xlab="Treatment", ylab="Hours slept")
+@
+\caption{Plot summarizing the data}
+\label{fig:box}
+\end{figure}
+
+In the Fig. \ref{fig:box}, we have a box plot to explore the difference in treatment effects over all patients. and we can see that overall treatment C and D seem to work better than the first two. Treatment B has seems to have really high variance.\\
+\\
+Fig. \ref{fig:2b} shows number of hours of sleep each person gets. We can see that each person is different and gets more a less sleep regardless of treatment. E.g. patient 10 gets a lot of sleep regardless of which treatment he gets whereas patient 1 gets less sleep in general regardless of treatment. We can also see the effect of treatment described by last plot where treatment C and D seemed to work better in general. For most people, it's either treatment C or treatment D that provides the most hours of sleep.
+
+\begin{figure}[ht]
+<<fig=TRUE,echo=FALSE, height=5,width=5>>=
+plot( sleep$Patient, sleep$Hours, col=sleep$Treat, pch=16, 
+      xlab="Patient", ylab="Hours of sleep")
+legend("bottomright", c("A", "B", "C", "D"),col=1:length(unique(sleep$Treat)),
+       pch=16, title="Treatments")
+@
+\caption{Scatterplot represenation of given data}
+\label{fig:2b}
+\end{figure}
+\newpage{}
+\subsection{}
+For this problem we're going to try to fit a linear model with as:\\
+Hours $\sim$ Treatment + Patient\\
+
+We need independence between treatments and also between treatments and individuals.
+\subsection{}
+<<echo=FALSE>>=
+fit<-lm(Hours~Treatment + factor(Patient), data=sleep)
+summary(fit)
+@
+We can also run two way anova model to check the statistical significance of the two factor variables.
+
+<<echo=FALSE>>=
+fit1<-aov(Hours~Treatment + factor(Patient), data=sleep)
+summary(fit1)
+@
+
+The results reflect what we expected from part 3. We see statistical significance in almost all of them and alsotreatment C and treatment D seem to be working better. The patients underlying response to the treatments is also reflected as predicted by the plots.
+
+\subsection{}
+If we try to estimate the treatment x patient interaction based on this data set, we'll end up with more covariates than the number of observations. So, the estimation is not possible using the simple model described above.
+
+
+\section{Problem 3}
+
+The plot provided in lecture 3 is reproduced in Fig. \ref{fig:3}. The code is included in appendix.
+\begin{figure}[h]
+<<fig=TRUE, echo=FALSE, height=6,width=7>>=
+##clopper-pearson
+N=999
+n=25
+step=1/(N+1)
+prob=seq(step,N*step,step)
+
+coverageCP=rep(0,N)
+for (pi in prob){
+  cov=0
+  for (x in 0:n){
+    int=rep(0,2)
+    int[1] = qbeta(.025,x,n-x+1)
+    int[2] = qbeta(.975,x+1,n-x)
+    if (pi>=int[1]&pi<=int[2]){
+      cov=cov+dbinom(x,n, pi)
+    }
+  }
+  coverageCP[pi*(N+1)]=cov
+}
+
+
+#wald
+coverageWald=rep(0,N)
+for (pi in prob){
+  cov=0
+  for (x in 0:n){
+    int=rep(0,2)
+    thetaHat=x/n
+    int[1] = thetaHat-1.96*sqrt(thetaHat*(1-thetaHat)/25)
+    int[2] = thetaHat+1.96*sqrt(thetaHat*(1-thetaHat)/25)
+    if (pi>=int[1]&pi<=int[2]){
+      cov=cov+dbinom(x,n, pi)
+    }
+  }
+  coverageWald[pi*(N+1)]=cov
+}
+
+
+##Score
+coverageScore=rep(0,N)
+for (pi in prob){
+  cov=0
+  for (x in 0:n){
+    int=rep(0,2)
+    thetaHat=x/n
+    z=1.96
+    int[1] = 1/(1+z^2/n)*(thetaHat+z^2/(2*n)-z*sqrt(thetaHat*(1-thetaHat)/n+z^2/(4*n^2)))
+    int[2] = 1/(1+z^2/n)*(thetaHat+z^2/(2*n)+z*sqrt(thetaHat*(1-thetaHat)/n+z^2/(4*n^2)))
+    if (pi>=int[1]&pi<=int[2]){
+      cov=cov+dbinom(x,n, pi)
+    }
+  }
+  coverageScore[pi*(N+1)]=cov
+}
+plot(prob,coverageCP,type="l",col="black", ylim=c(.7,1), 
+     ylab= "Coverage Probability", xlab=expression(pi), lwd=2)
+lines(prob,coverageScore, col="red", lty=3, lwd=2)
+lines(prob,coverageWald,col="blue", lty=2, lwd=2)
+lines(prob,rep(.95,N))
+legend("bottom", c("Clopper-Pearson", "Score", "Wald"), bty="n",
+       lty=c(1,3,2),lwd=c(2,2,2), col=c("black", "red", "blue"))
+@
+\caption{Exact coverage propability for three CIs}
+\label{fig:3}
+\end{figure}
+
+\section{Appendix}
+Codes used:\\
+\textbf{Problem 1}
+
+<<eval=FALSE>>=
+jellyfish=read.table("jellyfish.dat")
+plot(jellyfish$Width,jellyfish$Length, type="p", pch=16, col=jellyfish$Site,
+     xlab="Width", ylab="Length")
+legend("topleft", c("Danger Island", "Salamander Bay"),
+       col=1:length(unique(jellyfish$Site)),pch=16,title="Sites")
+@
+
+\textbf{Problem 2}
+
+<<eval=FALSE>>=
+sleep=read.table("sleep.dat", header=T)
+sleep$Treat=as.numeric(sleep$Treatment)
+
+#2.3
+boxplot(sleep$Hours~sleep$Treat, xlab="Treatment", ylab="Hours slept")
+
+plot( sleep$Patient, sleep$Hours, col=sleep$Treat, pch=16, 
+      xlab="Patient", ylab="Hours of sleep")
+legend("bottomright", c("A", "B", "C", "D"),col=1:length(unique(sleep$Treat)),
+       pch=16, title="Treatments")
+
+fit<-lm(Hours~Treatment + factor(Patient), data=sleep)
+summary(fit)
+
+fit1<-aov(Hours~Treatment + factor(Patient), data=sleep)
+summary(fit1)
+
+
+@
+
+
+
+\textbf{Problem 3}
+<<eval=FALSE>>=
+##clopper-pearson
+N=999
+n=25
+step=.1/(N+1)
+prob=seq(step,N*step,step)
+
+coverageCP=rep(0,N)
+for (pi in prob){
+  cov=0
+  for (x in 0:n){
+    int=rep(0,2)
+    int[1] = qbeta(.025,x,n-x+1)
+    int[2] = qbeta(.975,x+1,n-x)
+    if (pi>=int[1]&pi<=int[2]){
+      cov=cov+dbinom(x,n, pi)
+    }
+  }
+  coverageCP[pi*(N+1)]=cov
+}
+
+
+#wald
+coverageWald=rep(0,N)
+for (pi in prob){
+  cov=0
+  for (x in 0:n){
+    int=rep(0,2)
+    thetaHat=x/n
+    int[1] = thetaHat-1.96*sqrt(thetaHat*(1-thetaHat)/25)
+    int[2] = thetaHat+1.96*sqrt(thetaHat*(1-thetaHat)/25)
+    if (pi>=int[1]&pi<=int[2]){
+      cov=cov+dbinom(x,n, pi)
+    }
+  }
+  coverageWald[pi*(N+1)]=cov
+}
+
+
+##Score
+coverageScore=rep(0,N)
+for (pi in prob){
+  cov=0
+  for (x in 0:n){
+    int=rep(0,2)
+    thetaHat=x/n
+    z=1.96
+    int[1] = 1/(1+z^2/n)*(thetaHat+z^2/(2*n)-z*sqrt(thetaHat*(1-thetaHat)/n+z^2/(4*n^2)))
+    int[2] = 1/(1+z^2/n)*(thetaHat+z^2/(2*n)+z*sqrt(thetaHat*(1-thetaHat)/n+z^2/(4*n^2)))
+    if (pi>=int[1]&pi<=int[2]){
+      cov=cov+dbinom(x,n, pi)
+    }
+  }
+  coverageScore[pi*(N+1)]=cov
+}
+plot(prob,coverageCP,type="l",col="black", ylim=c(.7,1), 
+     ylab= "Coverage Probability", xlab=expression(pi), lwd=2)
+lines(prob,coverageScore, col="red", lty=3, lwd=2)
+lines(prob,coverageWald,col="blue", lty=2, lwd=2)
+lines(prob,rep(.95,N))
+legend("center", c("Clopper-Pearson", "Score", "Wald"),
+       lty=c(1,3,2),lwd=c(2,2,2), col=c("black", "red", "blue"))
+@
+
+\end{document}

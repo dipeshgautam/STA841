@@ -1,0 +1,239 @@
+\documentclass{article}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{Sweave}
+\usepackage[letterpaper, portrait, margin=1in]{geometry}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{STA841 HW4}
+\author{Dipesh Gautam}
+\date{\today}
+\maketitle
+<<echo=FALSE>>=
+setwd("C:/Users/dipesh/Desktop/GoogleDrive/GradClasses/SemIII/STA841/HW4")
+set.seed(1000)
+#install.packages("aod")
+#install.packages("plyr")
+library(aod)
+library(dplyr)
+library(Matrix)
+library(tidyr)
+library(MASS)
+
+#Load data for problem 1
+cancermap = read.table("cancermap.dat")
+cancermap=as.matrix(cancermap)
+rotate <- function(x) t(apply(x, 2, rev))
+@
+
+
+\section{Problem 1}
+In this problem we're looking at the spatial correlation of cancer rates using the data from $66x66$ pixel map of Eastern US.
+\subsection{}
+We've plotted the incidence map of the cancer rates in the Eastern US in Fig. \ref{fig1}
+
+\begin{figure}[H]
+\centering
+<<echo=FALSE, fig=TRUE>>=
+image(rotate(cancermap))
+legend("bottomright", c("","low", "high"), col = c("white","red","orange"), pch=c(15,15,15))
+@
+\caption{Incidence map of cancer rates in the Eastern US}
+\label{fig1}
+\end{figure}
+
+\subsection{}
+To check for spatial correlation in cancer rates, we fit the following autologistic model:
+$$logit(P(Y))=\alpha +\beta(Y_E+Y_S+Y_W+Y_N)$$\\
+We notice that all the pixels do not have all four neighbors. To easily handle this missing data, we removed all the pixels without all four neighbors from analysis. We lost only about 10\% of the data in doing so. Since we're losing just 10\% from about 2300 data points, the drop is justified.\\
+The summary of the model is shown below.\\
+<<echo=false>>=
+accept = matrix(0,nrow(cancermap),ncol(cancermap))
+for (i in 2:(nrow(cancermap)-1)){
+  for (j in 2:(ncol(cancermap)-1)){
+    if (max(cancermap[i-1,j],cancermap[i+1,j],cancermap[i,j-1],cancermap[i,j+1])<2){
+      #if neighboring cell not in map remove the data
+      accept[i,j] = 1
+    }
+  }
+}
+cancermap1 = matrix(0,nrow(cancermap),ncol(cancermap))
+cancermap1[which(accept==1)] = cancermap[which(accept==1)+1]+cancermap[which(accept==1)-1]+
+  cancermap[which(accept==1)+ncol(cancermap)]+cancermap[which(accept==1)-ncol(cancermap)]
+y=cancermap[which(accept==1)]
+y1 = cancermap1[which(accept==1)]
+
+
+m1=glm(cbind(y,1-y)~y1, family=binomial(link="logit"))
+summary(m1)
+devResid = round(m1$deviance,2)
+df = m1$df.residual
+beta = m1$coefficient[2]
+odds=exp(beta)-1
+@
+We have Residual deviance of \Sexpr{devResid} on \Sexpr{df} degrees of freedom. The ratio is fairly close to 1, showing no overdispersion.\\
+The coefficient, $\beta=$ \Sexpr{round(beta,3)}. The value is statistically significant. So, we can conclude that there is evicence for spatial correlation. Given the value of $\beta$, we can interpret that having 1 extra neighbor with high cancer rate, increases the odds of a place having high cancer rate by \Sexpr{round(odds, 3)}.\\
+
+\subsection{}
+We now look at permutation test to test the null hypohtesis that $H_0:\beta=0$, i.e. the 619 pixels with high cancer rates do not cluster. For this, we picked 619 random pixels out of 2293 that corresponding to Eastern US and assigned them high cancer rate and fit the same model as in part 1.1. The total number of ways to permute is out of the scope of the computer. So, we ran just 5000 random samples and approximated the distribution of $\beta$ using those samples. The histogram of the sampled $\beta$ is shown in Fig. \ref{fig2}.\\
+
+\begin{figure}[]
+\centering
+<<echo=false, fig=TRUE>>=
+
+
+test <- function(data){  
+  indata = which(data==1|data==0)
+  x = matrix(2, nrow(data), ncol(data))
+  x[indata] = sample(data[indata])
+  accept = matrix(0,nrow(x),ncol(x))
+  data1_1 = matrix(0,nrow(x),ncol(x))
+  for (i in 2:(nrow(x)-1)){
+    for (j in 2:(ncol(x)-1)){
+      if (max(x[i-1,j],x[i+1,j],x[i,j-1],x[i,j+1])<2){#if neighboring cell not in map ignore the data
+        accept[i,j] = 1
+      }
+    }
+  }
+  data1 = matrix(0,nrow(data),ncol(data))
+  data1[which(accept==1)] = x[which(accept==1)+1]+x[which(accept==1)-1]+
+    x[which(accept==1)+ncol(x)]+x[which(accept==1)-ncol(x)]
+  y=data[which(accept==1)]
+  y1 = data1[which(accept==1)]
+  
+  fit=glm(cbind(y,1-y)~y1, family=binomial(link="logit"))
+  fit$coefficients
+}
+
+BETA <- replicate(5000, test(cancermap))
+
+hist(BETA[2,], xlab="beta", main="")
+CI = quantile(BETA[2,], c(.005,.995))
+CI
+@
+\caption{Distribution of $\beta$ from permuted samples}
+\label{fig2}
+\end{figure}
+Also, the true $\beta$ is not included in the 99\% confidence interval from permutation test. This again supports our result from the previous part that there is spatial correlation in cancer rates.\\
+
+
+\subsection{}
+We want to test the effect of wind blowing from West to East, which might lead to pixels being more similar to neighbors on the East and West than to the neighbors on the North and South. To test this we fit an autologistic model specified as below:\\
+$$logit(P(Y))=\alpha +\beta_1(Y_E+Y_S+Y_W+Y_N)+\beta_2(Y_E+Y_W)$$\\
+The summary of this model fit is given below.\\
+<<echo=FALSE>>=
+cancermap2 = matrix(0,nrow(cancermap),ncol(cancermap))
+cancermap2[which(accept==1)] = cancermap[which(accept==1)-ncol(cancermap)]+
+  cancermap[which(accept==1)+ncol(cancermap)]
+y2 = cancermap2[which(accept==1)]
+
+m2=glm(cbind(y,1-y)~y1+y2, family=binomial(link="logit"))
+summary(m2)
+@
+We see that there is insignificant gain from just the east and west neighbors compared to all the neighbors so, we can say that the effect of wind blowing from west to east in the cancer rates is negligible.\\
+
+\section{Problem 2}
+In this problem, we're looking at the relation between parental socioeconomic status and the mental health of children. Given the data where response is ordered factor, we fit the proportional-odds logistic regression model given by:
+$$logit P(Y<=j|x) = \alpha_j + SES'\beta$$
+In this model, we have different intercepts for each mental health status, but $\beta$ is shared across all. Even though Socioeconomic status of parents is an ordered factor, for simplicity in interpretation, it is taken to be unordered factor but the effect should be apparent in inference.\\
+In R, we fit the model as:\\
+polr(status $\sim$ ses, weights = count, data = data2)\\
+
+
+This actually fits the model:\\
+$$logit P(Y<=j|x) = \alpha_j - SES'\beta$$
+So, the coefficients will have opposite sign than expected. The summary is shown below.\\
+<<echo=FALSE>>=
+ses = rep(c("A","B","C","D", "E","F"),4)
+status = rep(c("well","mild","moderate","impaired"), each=6)
+count = c(64,57,57,72,36,21,94,94,105,141,97,71,58,54,65,77,54,54,46,40,60,94,78,71)
+
+well = c(64,57,57,72,36,21)
+mild = c(94,94,105,141,97,71)
+moderate = c(58,54,65,77,54,54)
+impaired = c(46,40,60,94,78,71)
+
+data2 = data.frame(ses, status, count)
+data2$status=factor(data2$status, ordered=T)
+
+fit2 = polr(status~ses, weights = count, data = data2)
+summary(fit2)
+@
+In this model, our baseline is SES A, i.e., high socioeconomic status of parents. We can see by looking at different $\alpha_j$ that for the baseline group, there's much higher odds of falling into "well" mental health status. If we look at the different $\beta$ values, we can see that lower the socio economic group, higher the odds of having worse mental health status.\\
+
+\section{Problem 3}
+Moved to next homework as per instruction.
+
+\section{Problem 4}
+This problem looks at the effect of abode type, education level and years since first marriage on the number of children a woman of Indian race in Fiji has.\\
+
+
+<<echo=FALSE>>=
+data4 = read.table("fiji.dat", header =T)
+data4$marriage = factor(data4$marriage, ordered=F)
+data4$edu= factor(data4$edu, ordered=F)
+data4$abode = factor(data4$abode)
+data4$count = round(data4$average*data4$tot,0)
+@
+\subsection{}
+An appropriate model to fit in this case seems to be log-linear model with poisson family (log link). We're looking at count data if we look at total children born to each group of women. So, poission family of log-linear model seems appropriate. For simplicity in interpretability, we assumed unordered factors for both marriage and education even though they should be ordered factors. Also, we rounded the total number of children to the nearest whole number as the rounding to two decimal places in the averages caused some totals to be decimals. The model we fit is:\\
+log E(total number of children) = log(total women) + marriage + abode + education,\\
+where log(total women) is the offset.\\
+In R, the code is\\
+glm(count$\sim$marriage+edu+abode, family=poisson(link=log), 
+           offset = log(tot), subset=(tot>0), data = data4)\\
+The summary is shown below. There seems to be slight underdispersion in this model. We also estimated $\sigma^2$ and plugged that into estimating equation to check for model adequacy.\\           
+<<echo=FALSE>>=
+fit4 = glm(count~marriage+edu+abode, family=poisson(link=log), 
+           offset = log(tot), subset=(tot>0), data = data4)
+summary(fit4)
+s2= sum(fit4$resid^2/fit4$fitted)/fit4$df.resid
+summary(fit4, dispersion=s2)
+coeff= round(fit4$coefficient,3)
+abode2 = round(exp(coeff[10]),2)
+@
+\subsection{}
+We're assuming all three covariates(abode, edu, marriage) to be unordered factors in the model. So, for any coefficient $\beta$, it implies that being in the certain category leads to increase in mean by $e^{\beta}$ times or in our problem, mean number of children is $e^{\beta}$ times more than that from baseline for each parameter. The baseline is urban woman(abode=1) with no education(edu=1) and less than 5 years of marriage(marriage=1). So, we have coefficients for abode2, marriage2-6 and educ2-4 and the intercept. $\beta_{abode2}$ tells extra mean number of children rural women have compared to urban women. With $\beta_{abode2}=$ \Sexpr{coeff[10]}, we have that rural women have \Sexpr{abode2} times more children than urban woman with everything else remaining the same. Similarly $exp(\beta_{marriage5})$ gives the times more children the women with 20-24 years since first marriage are likely to have compared to women with less than 5 years of marriage and so on.\\
+Time since first marriage seems to be the major factor affecting the number of children. We do see some variation due to education level and abode type with more educated women tending to have fewer children and rural women having more children than urban women. But most of the difference seem to be because of the length of the marriage, which is to be expected.
+
+
+
+\subsection{}
+In the model, urban woman(abode=1) with no education(edu=1) and less than 5 years of marriage(marriage=1) is the baseline. We're looking at mean number of children born to urban woman(baseline) with upper elementary education(edu=3) after ten years of marriage(marriage=3). Here we assumed that after ten years of marriage meant that the women were in group 3(10-14). To get the mean, we calculated the mean of the linear combination of random variables $\alpha+\beta_{educ3}+\beta_{marriage3}$ and took the exponential of the mean.\\
+$$\mu = exp(\alpha+\beta_{educ3}+\beta_{marriage3})$$
+For the 95\% confidence interval for the mean, we calculated the variance of the linear combination of the random variable and sampled 5000 from the univariate normal distribution and calculated the inner 95\% quantile of the samples.\\
+Mean and 95\% confidence interval for the mean are shown below in the results.
+<<>>=
+varcovar=vcov(fit4)
+cov= varcovar[c("(Intercept)","edu3", "marriage3"), 
+         c("(Intercept)","edu3", "marriage3")]
+var = cov[1,1]+cov[2,2]+cov[3,3]+2*cov[2,1]+ 2*cov[3,1]+2*cov[3,2]
+mu = fit4$coefficients["(Intercept)"] + fit4$coefficients["edu3"]+
+      fit4$coefficients["marriage3"]
+
+samples = exp(rnorm(5000, mu, sqrt(var)))
+mean = exp(mu)
+mean
+quantile(samples, c(.025,.975))
+@
+
+\subsection{}
+This problem is similar to the one in previous part with only changes being that now we're looking at lifetime(marriage=6) mean number of children born to rural women(abode=2) with secondary education(edu=4). The analysis and procedure is the same as above with mean given by:\\
+$$\mu = exp(\alpha+\beta_{abode2}+\beta_{educ4}+\beta_{marriage6})$$
+
+<<>>=
+cov2 = varcovar[c("(Intercept)","abode2","edu4", "marriage6"), 
+              c("(Intercept)","abode2","edu4", "marriage6")]
+var2 = cov2[1,1]+cov2[2,2]+cov2[3,3]+cov2[4,4]+2*cov2[2,1]+ 2*cov2[3,1]+2*cov2[3,2]+2*cov2[4,1]+
+      2*cov2[4,2]+2*cov2[4,3]
+mu2 = fit4$coefficients["(Intercept)"] + fit4$coefficients["abode2"]+
+  fit4$coefficients["edu4"] +fit4$coefficients["marriage6"]
+
+samples2 = exp(rnorm(5000, mu2, sqrt(var2)))
+mean =exp(mu2)
+mean
+quantile(samples2, c(.05,.95))
+@
+\end{document}

@@ -1,0 +1,184 @@
+\documentclass{article}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{Sweave}
+\usepackage[letterpaper, portrait, margin=1in]{geometry}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{STA841 HW5}
+\author{Dipesh Gautam}
+\date{\today}
+\maketitle
+
+<<echo=FALSE>>=
+setwd("C:/Users/dipesh/Desktop/GoogleDrive/GradClasses/SemIII/STA841/HW5")
+set.seed(1000)
+library(vcd)
+@
+\section{Problem 1, Agresti 11.12}
+In this problem we look at matched pairs of reviews by two reviewers and the reviews are categorized con, mixed or pro.
+\subsection{1a}
+We fit the symmetry, quasi-independence and quasi-symmetry model summary of each is given below.
+
+<<echo=FALSE>>=
+
+count = c(24, 8,13,8,13,11, 10,9,64)
+ebert = c(1,2,3,1,2,3,1,2,3)
+siskel = c(1,1,1,2,2,2,3,3,3)
+
+movies = data.frame(count=count, ebert=ebert, siskel=siskel)
+movies$sym = factor(paste(pmin(movies$ebert,movies$siskel),pmax(movies$ebert,movies$siskel),
+                    sep=","))
+
+#1.a
+#symmetry
+options(contrasts = c("contr.treatment", "contr.ploy"))
+fit.sym = glm(count~sym, family = poisson(log), data = movies)
+summary(fit.sym)
+
+
+#quasi-symmetry
+movies$ebert = factor(movies$ebert)
+movies$siskel = factor(movies$siskel)
+
+
+options(contrasts = c("contr.treatment", "contr.ploy"))
+fit.qsym = glm(count~sym + ebert, family = poisson(log), data = movies)
+summary(fit.qsym)
+
+#quasi-independence
+movies$D1 = as.numeric(movies$sym =="1,1")
+movies$D2 = as.numeric(movies$sym =="2,2")
+movies$D3 = as.numeric(movies$sym =="3,3")
+
+options(contrasts = c("contr.treatment", "contr.ploy"))
+fit.qind = glm(count~siskel+ebert +D1+D2+D3, family = poisson(log), data = movies)
+summary(fit.qind)
+@
+
+We see that symmetry model has residual deviance of \Sexpr{round(fit.sym$deviance,3)} on \Sexpr{fit.sym$df.residual} degrees of freedom whereas quasi-symmetry and quasi-independence both have residual deviance of \Sexpr{round(fit.qsym$deviance,3)} on \Sexpr{fit.qsym$df.residual} degree of freedom. So, we can conclude that both the quasi-symmetry and quasi-indepence model fit much better than the symmetry model.
+
+\subsection{1b}
+<<>>=
+a = anova(fit.sym, fit.qsym)
+dev = round(a$Deviance[2],3)
+df = a$Df[2]
+dev
+df
+@
+We see that the deviance between symmetry and quasi-symmetry or quasi-independence model is \Sexpr{dev} on \Sexpr{df} degrees of freedom. So, we can see the evidence of marginal homogeneity.
+
+
+
+\subsection{1c}
+<<>>=
+data.tab = xtabs(count~siskel+ebert, data = movies)
+kappa = Kappa(data.tab, weights = "Equal-Spacing")
+kappa.unweighted = kappa$Unweighted[1]
+kappa.unweighted.se = kappa$Unweighted[2]
+
+kappa.weighted = kappa$Weighted[1]
+kappa.weighted.se = kappa$Weighted[2]
+kappa.unweighted 
+kappa.unweighted.se
+kappa.weighted
+kappa.weighted.se
+@
+
+
+\section{Problem 2, Agresti 11.17}
+We fit the Bradley-Terry model on the frequency of journal citations among four statistics journals in order to infer the prestige rankings among the journals. the summary of the fit is given below.
+<<echo=FALSE>>=
+y = c(714,33,320,284,730,425,813,276,
+      498,68,1072,325,221,17,142,188)
+
+cited = factor(rep(c("biometrika", "communstat", "jasa",
+            "jrss-b"),4))
+citing = factor(rep(c("biometrika", "communstat", "jasa",
+               "jrss-b"),each=4))
+
+
+journal = data.frame(y=y, cited=cited, citing = citing)
+
+journal$sym = factor(paste(pmin(as.numeric(journal$cited),as.numeric(journal$citing)),
+                                      pmax(as.numeric(journal$cited),as.numeric(journal$citing)),
+                           sep=","))
+
+options(contrasts = c("contr.treatment", "contr.ploy"))
+fit2.bt = glm(y~sym + cited, family = poisson(log), data = journal)
+summary(fit2.bt)
+x = exp(fit2.bt$coefficients["citedjrss-b"]-fit2.bt$coefficients["citedcommunstat"])
+prob = round(x/(1+x),3)
+@
+We get residual devianc of \Sexpr{round(fit2.bt$deviance, 3)} on \Sexpr{fit2.bt$df.residual} degrees of freedom. So, we are fairly satisfied with the model fit.\\
+We have the Biometrika parameter as 0, Communications in statistics as \Sexpr{round(fit2.bt$coefficients["citedcommunstat"],3)}, JASA as \Sexpr{round(fit2.bt$coefficients["citedjasa"],3)} and JRSS-B as \Sexpr{round(fit2.bt$coefficients["citedjrss-b"],3)}. So the prestige ranking is:
+\begin{enumerate}
+\item{JRSS-B} \item{Biometrika} \item{JASA} \item{Communications in Statistics}
+\end{enumerate}
+For citations involving Communications in Statistics and JRSS-B, the probability that Commun. Stat cites JRSS-B article is \Sexpr{prob}
+
+
+\section{Problem 3, Remaining from HW4}
+We fit the various model to thest the given hypotheses. To test hypothesis 1, we fit the log-linear intercept model. Similarly fo the column totals and row totals we, added an extra covariate, column( or row) factor. Finally fo the one involving the difference between numbers < 45 or $\geq$ 45, we added an indicator covariate. The summaries of all these fits are below:
+
+
+<<echo=FALSE>>=
+count = read.delim("pick6.dat", sep="", header=F, fill=T)
+
+count = as.vector(t(count))
+count = count[!is.na(count)]
+tot = rep(312, 54)
+pick6 = data.frame(count=count, tot=tot)
+pick6$row = c(rep(0, 9), rep(c(10, 20, 30, 40), each=10), rep(50, 5) )
+pick6$column = c(seq(1,9), rep(seq(0,9), 4), seq(0,4))
+pick6$geq45 =  as.numeric((pick6$row+pick6$column)<=45)
+pick6$row = factor(pick6$row)
+pick6$column = factor(pick6$column)
+
+fit3.1 = glm(count~1, family=poisson(link=log), 
+             offset = log(tot), subset=(tot>0), data = pick6)
+
+summary(fit3.1)
+
+
+fit3.2 = glm(count~1+column, family=poisson(link=log), 
+             offset = log(tot), subset=(tot>0), data = pick6)
+
+summary(fit3.2)
+
+
+fit3.3 = glm(count~1+row, family=poisson(link=log), 
+             offset = log(tot), subset=(tot>0), data = pick6)
+
+summary(fit3.3)
+
+
+
+fit3.4 = glm(count~1+geq45, family=poisson(link=log), 
+             offset = log(tot), subset=(tot>0), data = pick6)
+
+summary(fit3.4)
+
+@
+We can conclude that variation of frequencies, row totals are not consistent with hypothesis of uniformity. Especially for the row totals, 10+ and 40+ and 50+ have lower chance of getting picked. Also that frequency of occurence of numbers 45-54 is not the same as the remaining numbers. Variation of column totals seem to be consistent with the hypothesis of uniformity.\\
+With the additional information that in the first 24 weeks only numbers 1-44 were drawn and in the last 52 weeks nubmers were drawn from 1-54, we adjusted the total available for each number from the same 312 for all to 312 for numbers 1-44 and 168 for numbers 45-54. As the numbers 45-54 had only 168 chances to be picked instead of 312 for the other numbers.\\
+Summaries for fits to test hypotheses 1 and 2 again under this information is given below:
+<<echo=FALSE>>=
+
+pick6$tot1 = c(rep(312, 44), rep(168, 10))
+
+fit3.1a = glm(count~1, family=poisson(link=log), 
+             offset = log(tot1), subset=(tot>0), data = pick6)
+
+summary(fit3.1a)
+
+fit3.2a = glm(count~1+column, family=poisson(link=log), 
+             offset = log(tot1), subset=(tot>0), data = pick6)
+
+summary(fit3.2a)
+@
+Still, the variation of frequency is not consistent with the hypothesis of uniformity. Variation of column totals still is.
+
+\end{document}

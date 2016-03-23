@@ -1,0 +1,24 @@
+Shown are results from tosses of cylindrical "dice".
+
+
+All cylinders have radius 1 inch.
+
+Six have height 1/2 inch, six 3/4 inch, and six 1 inch.
+
+
+The first square of numbers record the
+results of 25 tossings of all six 1/2 inch cylinders.
+
+Shown are the number of cylinders lying on 
+their 'side' (as opposed to their two 'ends').
+
+
+The second square of numbers record the
+results for 25 tossings fo the 3/4 inch cylinders.
+
+The bottom square shows the 1 inch cylinders.
+
+
+The goal is to estimate what height gives a 
+one third chance for the cylinder to land on
+its side.

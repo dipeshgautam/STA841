@@ -1,0 +1,6 @@
+Each pixel represents a rectangular region.
+The number in the pixel is
+0 - for Eastern US pixel with low cancer rate
+1 - for Eastern US pixel with high cancer rate
+2 - for pixel outside of the Eastern US
+

@@ -1,0 +1,275 @@
+\documentclass{article}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{Sweave}
+\usepackage[letterpaper, portrait, margin=.9in]{geometry}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{STA841 HW3}
+\author{Dipesh Gautam}
+\date{\today}
+\maketitle
+
+<<echo=FALSE>>=
+library(aod)
+library(dplyr)
+@
+
+\section{Problem 1}
+see attached
+
+
+\section{Problem 2}
+\subsection{}
+Given the null hypothesis that $log_2LD_{50}=5$, we fit the probit model below. This is restriction of the full probit model we fit in the HW2 problem 3. The summaries are shown for both full and the restricted model below.
+<<fig=F,echo=FALSE>>=
+dose = seq(0,5)
+dead = c(0,2,3,5,7,10)
+total = c(7,9,8,7,9,11)
+alive = total-dead
+
+data = data.frame(dose=dose, dead=dead, alive=alive, total=total)
+
+#full model
+fit.full = glm(cbind(dead,alive)~dose, family=binomial(link=probit),
+                 data=data)
+summary(fit.full)
+fit.sub=glm(cbind(dead,alive)~I(-5+dose)-1, family=binomial(link=probit),
+    data=data)
+summary(fit.sub)
+@
+
+
+
+<<echo=FALSE>>=
+LR_5=2*(logLik(fit.full)-logLik(fit.sub))
+##if null is correct, chi-sq(1)
+
+test=anova(fit.sub,fit.full, test="Chisq")
+test
+LR_5_1 = test$Dev[2]
+p_value = test$Pr[2]
+
+@
+Log-likelihood ratio statistic LR(5) can be computed by just taking twice the diffecence between unrestricted and restricted log maximum likelihood which was found to be: \Sexpr{round(LR_5,3)}.\\
+If the null hypothesis is correct, the approximated distribution of the difference will be $\chi^2_1$.
+We used chisq test to get the p-value which was found to be: \Sexpr{round(p_value,7)}.\\
+
+
+\subsection{}
+Profile log-likelihood of $log_2LD_{50}$ is plotted against $log_2LD_{50}$ for a range of possible values below. We fitted different sub-model defined by different values of $log_2LD_{50}$ and obtained the profile log-likelihood for each sub-model and the values are plotted in Fig \ref{Fig1}.
+\begin{figure}[H]
+\centering
+<<fig=TRUE,echo=FALSE, height=3,width=5>>=
+N=100
+profile.lik = rep(NA,N)
+ld50=seq(1,7, length=N)
+for (i in 1:N){
+  fit.sub=glm(cbind(dead,alive)~I(-ld50[i]+dose)-1, family=binomial(link=probit),
+              data=data)
+  profile.lik[i] = logLik(fit.sub)
+}
+hor.line = as.numeric(-qchisq(0.9,1)/2+logLik(fit.full))
+plot(seq(1,7,length=100),profile.lik, type="l", col="red", main="Profile log-likelihood", xlab="log2LD50", ylab="profile ll")
+abline(h=hor.line, lty = 2, col ="blue")
+
+profLik = data.frame("LD50"=ld50,"profLik"=profile.lik)
+profLik[,"diff"]=abs(profLik[,"profLik"]-hor.line)
+profLik1 = arrange(profLik,diff)
+upper = 2^max(profLik1[c(1,2),"LD50"])
+lower = 2^min(profLik1[c(1,2),"LD50"])
+@
+\caption{}
+\label{Fig1}
+\end{figure}
+
+
+Using the data and the plot, we also constructed profile likelihood 90\% confidence set, which is [\Sexpr{round(lower,3)}, \Sexpr{round(upper,3)}].\\
+
+\section{Problem 3}
+For this problem data from $cyl.txt$ is used. The data has result from tossing of cylindrical "dice" with same radius and different heights. We're interested in the probability that the dice lands on the side and not the ends.
+\subsection{}
+For this part, we fit a simple logistic regression model, the summary of which is presented below. 
+<<echo=FALSE>>=
+x <- scan("cyl.txt", what="", sep="\n")
+y <- strsplit(x, "[[:space:]]+")
+y=as.numeric(unlist(y))
+n = rep(6,75)
+height = rep(c(.5,.75,1), each=25)
+
+
+#3.1
+m1=glm(cbind(y,n-y)~height, family=binomial(link="logit"))
+summary(m1)
+
+#1/(1+exp(-(m1$coefficients[1]+m1$coefficients[2]* .5)))
+est.logit = (log(.5)-m1$coefficients[1])/m1$coefficients[2]
+CI.logit =(log(.5/(.5))-confint(m1)[1,])/confint(m1)[2,]
+fitted.logit=fitted.values(m1)
+predict.logit = predict(m1, newdata=data.frame(seq(.5,1,.5/74)), type="response")
+@
+After we fit the model, we were able to estimate the height for which the cylindrical dice have probability of $1/3$ of landing on their side.\\
+The estimated height using logistic regression is: \Sexpr{round(est.logit,3)}.
+
+
+\subsection{}
+Similarly, we fit a probit model, the summary of which is presented below.\\
+\begin{figure}[H]
+\centering
+<<fig=TRUE,echo=FALSE, height=4,width=6>>=
+m2=glm(cbind(y,n-y)~height, family=binomial(link="probit"))
+summary(m2)
+est.probit=(qnorm(.3)-m2$coefficients[1])/m2$coefficients[2]
+CI.probit =(qnorm(.3)-confint(m2)[1,])/confint(m2)[2,]
+fitted.probit=fitted.values(m2)
+plot(height, y/n, pch=16)
+lines(height, fitted.logit, col = "red", lty=1,lwd = 2)
+lines(height, fitted.probit, col = "blue", lty=2,lwd = 2)
+legend("topleft", c("data","logit", "probit"), col = c("black","red","blue"), pch=c(16,NA,NA),lty= c(0,1,2))
+
+@
+\caption{}
+\label{Fig2}
+\end{figure}
+Estimated height using probit model for which the cylindrical dice have probability of $1/3$ of landing on their side is: \Sexpr{round(est.probit,3)}.\\
+The two binary regressions along with the sample data are plotted in Fig. \ref{Fig2}
+
+\subsection{}
+
+We used bootstrap to construct a confidence interval for the difference between critical height estimated by logistic regression and the one estimated by probit model.
+<<echo=FALSE>>=
+  set.seed(1000)
+N = 1000
+diff.boot = double(N)
+y.boot = double(75)
+
+for (i in 1:N){
+  for (j in 1:length(y)){
+    y.boot[j] = sum(rbinom(n[j], 1, y[j]/n[j]))
+  }
+  logit.boot = glm(cbind(y.boot,n-y.boot)~height, family=binomial(link="probit"))
+  est.logit = (log(.5)-logit.boot$coefficients[1])/logit.boot$coefficients[2]
+  probit.boot = glm(cbind(y.boot,n-y.boot)~height, family=binomial(link="logit"))
+  est.probit=(qnorm(.3)-probit.boot$coefficients[1])/probit.boot$coefficients[2]
+  diff = est.logit-est.probit
+  diff.boot[i] = diff  
+}
+
+CI.diff= quantile(diff.boot, c(.025,.975))
+@
+  
+The 95\% confidence interval is found to be: [\Sexpr{round(CI.diff[1],3)}, \Sexpr{round(CI.diff[2],3)}].
+
+
+
+\section{Problem 4}
+To start with, we fit a logistic regression model with all of the given covariates. The result is shown below.\\
+
+<<echo=FALSE>>=
+
+data4=read.table("kredit.asc", header=T)
+data4=rename(data4, credit=kredit, currentBalance=laufkont, duration=laufzeit,
+                      paymentPrevious=moral, use=verw,
+                      maritalStatusGender=famges)
+
+data4=data4[,c("credit", "currentBalance", "duration", "paymentPrevious", "use", 
+              "maritalStatusGender")]
+data4$currentBalance = as.factor(data4$currentBalance)
+data4$paymentPrevious = as.factor(data4$paymentPrevious)
+data4$use = as.factor(data4$use)
+data4$maritalStatusGender = as.factor(data4$maritalStatusGender)
+
+m1=glm(cbind(credit,1-credit)~currentBalance+duration+paymentPrevious+
+         use+maritalStatusGender,
+       family=binomial(link="logit"), data=data4)
+summary(m1)
+
+@
+We have a Residual deviance of \Sexpr{round(m1$deviance,3)} on \Sexpr{m1$df.residual} degrees of freedom. We are fairly satisfied with this model as the ratio is close to 1.\\
+
+
+
+We then fit a probit model with the same covariates. Summary is given below and we see that both the probit and logit models behave similarly and there's no gain from probit model.
+
+<<echo=false>>=
+m2=glm(cbind(credit,1-credit)~currentBalance+duration+paymentPrevious+use+maritalStatusGender,
+       family=binomial(link="probit"), data=data4)
+summary(m2)
+anova(m1,m2, test="Chisq")
+@
+
+To look for any evidence of overdispersion, we fit a quasi-likelihood model with beta-binomial like variance, which is summarized below.
+<<echo=FALSE>>=
+quasibin(cbind(credit,1-credit)~currentBalance + duration + paymentPrevious + 
+           use + maritalStatusGender,data = data4, link="logit")
+@
+We obtain a $\hat{\rho}$ value close to 0, indicating that we do not have overall overdispersion problem.
+
+
+We then looked at interaction between our continuous variable given by duration of credit in months with a couple of covariates, namely, running account and payment of previous credits. Then we compare it with our original logistic model.\\
+<<echo=FALSE>>=
+m3=glm(cbind(credit,1-credit)~currentBalance+duration + duration:currentBalance + 
+         duration:paymentPrevious + paymentPrevious + use+ maritalStatusGender,
+       family=binomial(link="logit"), data=data4)
+summary(m3)
+
+test1 = anova(m1,m3, test="Chisq")
+print(test1)
+@
+
+We see that this model performs slightly better than our original model with Devianc of \Sexpr{round(test1$Deviance[2],3)} on loss of \Sexpr{test1$Df[2]} degrees of freedom.\\
+
+\section{Problem 5, 14.7 from Agresti}
+
+
+<<5data, echo=FALSE>>=
+clutch = rep(seq(1,7), 3)
+hatched =c(rep(0,7),3,0,8,10,25,7,10,0,0,6,9,23,5,4)
+total = rep(c(6,13,10,16,32,7,21),3)
+treatment = rep(c(1,2,3),each=7)
+
+data5 = data.frame(clutch = rep(seq(1,7), 3),
+                   hatched =c(rep(0,7),3,0,8,10,25,7,10,0,0,6,9,23,5,4),
+                   total = rep(c(6,13,10,16,32,7,21),3),
+                   treatment = as.factor(rep(c(1,2,3),each=7)))
+
+@
+\subsection{}
+We fit the model
+$$logit(\pi_{it})=\beta_1z_1+\beta_2z_2+\beta_3z3$$
+where $z_t=1$ for treatment $t$ and 0 else, summary of which is given below:
+<<5data, echo=FALSE>>=
+fit.5a = glm(cbind(hatched,total-hatched)~treatment-1,
+             family=binomial(link="logit"),  data =data5)
+summary(fit.5a)
+resid.dev = fit.5a$deviance
+df = fit.5a$df.residual
+@
+
+
+We see that th residual deviance is \Sexpr{round(resid.dev,3)} on \Sexpr{df} degrees of freedom. So, we have a overdispersion problem.\\
+
+Also, we see that $\hat{\beta}_1$ is \Sexpr{round(fit.5a$coefficient[1],3)}. Since treatment 1 has no success for at all, $\hat{\beta}_1$ should be $-\infty$.\\
+
+Since $\hat{\beta_1}$ is $-\infty$ becuase of zero probability for all in treatment 1, we can do a bayesian inference by putting beta prior spiked close to 0 for $\pi_i$ for treatment 1. It'll help us avoid the negative infinity in posterior and make ML estimation possible. Cons of this remedy is that it'll induce bias and also that we're ignoring the case when it might acutally be 0.\\
+
+\subsection{}
+To allow for overdispersion, we used the quasi-likelihood method with beta-binomial type variance. The summary of which is below.
+<<echo=false>>=
+quasibin(cbind(hatched,total-hatched)~treatment-1,data=data5,link="logit")
+@
+We see that the overdispersion parameter is 0.21, which is greater significantly greater than 0 which is an evidence of the presence of overdispersion in the data.\\
+If we look at the SE values for both treatment 2 and treatment 3, we see that they are inflated when compared to the SE values we obtained in previous part with binomial maximum likelihood. This shows the evidence of overdispersion for both treatments 2 and 3.
+
+
+\subsection{}
+
+Finally we fit the beta-binomial regression model on the data which allows for overdispersion. We fitted two different models with same $\phi$ for all groups and different $\phi_i$ for each treatment group. The summary for both is given below. 
+<<echo=FALSE>>=
+betabin(cbind(hatched,total-hatched)~treatment-1, random=~1, data =data5)
+betabin(cbind(hatched,total-hatched)~treatment-1, random=~treatment, data =data5)
+@
+We can conclude that treatment 2 allows for higher probability of hatched eggs than treatment 3.\\
+\end{document}
